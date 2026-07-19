@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+        .card { border-radius: 15px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card-header { background: transparent; font-weight: 600; border-bottom: 2px solid #f0f2f5; }
+        .table th { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container">
+            <span class="navbar-brand fs-3">📈 Dashboard</span>
+            <div>
+                <a href="/" class="btn btn-outline-light btn-sm">Home</a>
+                <a href="/predictions" class="btn btn-outline-light btn-sm">Predictions</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h2>📊 Model Performance Dashboard</h2>
+        
+        <!-- Stats Summary -->
+        <div class="row mt-3" id="stats-summary">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 id="total-employees">...</h4>
+                        <p class="text-muted">Total Employees</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="text-danger" id="high-risk">...</h4>
+                        <p class="text-muted">High Risk</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="text-warning" id="medium-risk">...</h4>
+                        <p class="text-muted">Medium Risk</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h4 class="text-success" id="low-risk">...</h4>
+                        <p class="text-muted">Low Risk</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Metrics -->
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">📊 Model Metrics</div>
+                    <div class="card-body" id="metrics">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Loading metrics...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">🎯 Risk Distribution</div>
+                    <div class="card-body" id="risk-chart">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Loading distribution...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Importance -->
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">📊 Feature Importance</div>
+                    <div class="card-body text-center">
+                        <img id="feature-img" src="" alt="Feature Importance" style="max-height:400px; max-width:100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Load Stats
+        // ============================================================
+        fetch('/api/dashboard/stats')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const s = data.stats;
+                    document.getElementById('total-employees').textContent = s.total_employees || 0;
+                    document.getElementById('high-risk').textContent = s.high_risk || 0;
+                    document.getElementById('medium-risk').textContent = s.medium_risk || 0;
+                    document.getElementById('low-risk').textContent = s.low_risk || 0;
+                }
+            });
+
+        // ============================================================
+        // Load Metrics
+        // ============================================================
+        fetch('/api/model/metrics')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.metrics) {
+                    let html = '<div class="table-responsive"><table class="table table-hover">';
+                    html += '<tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1-Score</th></tr>';
+                    for (const [model, metrics] of Object.entries(data.metrics)) {
+                        html += `<tr>
+                            <td><strong>${model}</strong></td>
+                            <td>${(metrics.Accuracy * 100).toFixed(1)}%</td>
+                            <td>${(metrics.Precision * 100).toFixed(1)}%</td>
+                            <td>${(metrics.Recall * 100).toFixed(1)}%</td>
+                            <td>${(metrics['F1-Score'] * 100).toFixed(1)}%</td>
+                        </tr>`;
+                    }
+                    html += '</table></div>';
+                    document.getElementById('metrics').innerHTML = html;
+                }
+            });
+
+        // ============================================================
+        // Load Risk Distribution
+        // ============================================================
+        fetch('/api/predictions/risk-distribution')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.distribution) {
+                    let html = '';
+                    const colors = {'High': '#dc3545', 'Medium': '#ffc107', 'Low': '#28a745'};
+                    const total = Object.values(data.distribution).reduce((a,b) => a+b, 0);
+                    for (const [tier, count] of Object.entries(data.distribution)) {
+                        const pct = total > 0 ? ((count/total) * 100).toFixed(1) : 0;
+                        html += `
+                            <div class="mb-2">
+                                <span class="badge" style="background:${colors[tier] || '#6c757d'}">${tier}</span>
+                                <span class="fw-bold">${count}</span> (${pct}%)
+                                <div class="progress" style="height:8px;">
+                                    <div class="progress-bar" style="width:${pct}%; background:${colors[tier] || '#6c757d'};"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    document.getElementById('risk-chart').innerHTML = html;
+                }
+            });
+
+        // ============================================================
+        // Load Feature Importance Chart
+        // ============================================================
+        fetch('/api/charts/feature-importance')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('feature-img').src = 'data:image/png;base64,' + data.image;
+                }
+            });
+    </script>
+</body>
+</html>
